@@ -7,7 +7,6 @@ using namespace std;
 
 void handleErrors(void) {
     ERR_print_errors_fp(stderr);
-    abort();
 }
 
 int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,
@@ -44,11 +43,28 @@ int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,
 
 unsigned char *getkey() {
     string skey;
-    skey = getpass("Enter key without blank: ");
-    if (skey.size() != 64) return NULL;
-    for (auto i : skey)
-        if (!isdigit(i) && !(i >= 'a' && i <= 'f'))
-            return NULL;
+
+    bool rsize = false, rchar = false;
+    while(!rsize || !rchar) {
+        skey = getpass("Enter key without blank: ");
+
+        if (skey.size() != 64) {
+            cout << "Key must be 32 bytes long." << endl;
+            rsize = false;
+        } else {
+            rsize = true;
+        }
+
+        for (int i = 0; i < 64; i++) {
+            if (!isdigit(skey[i]) && !(skey[i] >= 'a' && skey[i] <= 'f')){
+                cout << "Key must be in hexadecimal format." << endl;
+                rchar = false;
+                break;
+            } else {
+                rchar = true;
+            }
+        }
+    }
 
     unsigned char *key = (unsigned char *)malloc(32);
     for (int i = 0; i < 64; i += 2) {

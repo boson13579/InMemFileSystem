@@ -8,11 +8,12 @@
 #include "Encryption.h"
 #include "Filesystem.h"
 
-bool debug = false;
+bool debug = true;
 
 InMemoryFileSystem *filesystem = nullptr;
 
 static int ramfs_getattr(const char *path, struct stat *stbuf) {
+    // if(debug) std::cerr << "getattr " << path << std::endl;
     if (std::string(path) == "/") {
         stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
@@ -121,6 +122,12 @@ static int ramfs_open(const char *path, struct fuse_file_info *fi) {
         return -ENOENT;
     }
 
+    File *file = parent->files[file_name];
+    if (file -> key != NULL) return -ETXTBSY;
+
+    unsigned char *key = getkey();
+    file -> key = key;
+
     return 0;
 }
 
@@ -136,7 +143,7 @@ static int ramfs_read(const char *path, char *buf, size_t size, off_t offset, st
 
     File *file = parent->files[file_name];
     // AES decrypt
-    auto key = getkey();
+    auto key = file -> key == NULL ? getkey() : file -> key;
     if (key == NULL) return -EAGAIN;
     unsigned char plain[4096];
     decrypt(file->contents[offset].data.data(), file->contents[offset].data.size(), key, file->contents[offset].iv.data(), plain);
@@ -155,18 +162,26 @@ static int ramfs_write(const char *path, const char *buf, size_t size, off_t off
     if (parent->files.find(file_name) == parent->files.end()) {
         return -ENOENT;
     }
+    File *file = parent->files[file_name];
 
+    unsigned char predata[4096];
+    if (offset % 4096 != 0) {
+        off_t oldoff = offset / 4096 * 4096;
+        decrypt(file->contents[oldoff].data.data(), file->contents[oldoff].data.size(), file->key, file->contents[oldoff].iv.data(), predata);
+    }
+
+    memcpy(predata + offset % 4096, buf, size);
+    
     unsigned char iv[16];
     RAND_bytes(iv, 16);
-    unsigned char *key = getkey();
+    unsigned char *key = file -> key == NULL ? getkey() : file -> key;
     if (key == NULL) return -EAGAIN;
     unsigned char chiper[4096];  // if file larger than 4096, it will be cut and add offset
-    int chiper_size = encrypt((unsigned char *)buf, size, key, iv, chiper);
+    int chiper_size = encrypt((offset % 4096 != 0? predata : (unsigned char *)buf), offset%4096+size, key, iv, chiper);
 
-    File *file = parent->files[file_name];
-    file->contents[offset].size = size;
-    file->contents[offset].iv = std::vector<unsigned char>(iv, iv + 16);
-    file->contents[offset].data = std::vector<unsigned char>(chiper, chiper + chiper_size);
+    file->contents[offset / 4096 * 4096].size = offset + size;
+    file->contents[offset / 4096 * 4096].iv = std::vector<unsigned char>(iv, iv + 16);
+    file->contents[offset / 4096 * 4096].data = std::vector<unsigned char>(chiper, chiper + chiper_size);
 
     file->size = 0;
     for (auto [off, content] : file->contents) {
@@ -178,6 +193,7 @@ static int ramfs_write(const char *path, const char *buf, size_t size, off_t off
 }
 
 static int ramfs_truncate(const char *path, off_t size) {
+    if (debug) std::cerr << "truncate " << path << std::endl;
     Directory *parent = filesystem->findParentDirectory(path);
     if (!parent) return -ENOENT;
 
@@ -223,6 +239,21 @@ static int ramfs_utimens(const char *path, const struct timespec ts[2]) {
     return 0;
 }
 
+static int ramfs_release(const char *path, struct fuse_file_info *fi) {
+    if (debug) std::cerr << "release " << path << std::endl;
+
+    Directory *parent = filesystem->findParentDirectory(path);
+    if (!parent) return -ENOENT;
+
+    std::string file_name = filesystem->splitPath(path).back();
+    if (parent->files.find(file_name) == parent->files.end()) {
+        return -ENOENT;
+    }
+
+    parent->files[file_name]->key = NULL;
+
+    return 0;
+}
 static struct fuse_operations ramfs_oper = {
     .getattr = ramfs_getattr,
     .mkdir = ramfs_mkdir,
@@ -232,6 +263,7 @@ static struct fuse_operations ramfs_oper = {
     .open = ramfs_open,
     .read = ramfs_read,
     .write = ramfs_write,
+    .release = ramfs_release,
     .readdir = ramfs_readdir,
     .create = ramfs_create,
     .utimens = ramfs_utimens,

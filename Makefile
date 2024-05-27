@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -Wall 
+CXXFLAGS = -Wall
 TARGET = InMemFileSystem
 OBJS = InMemFileSystem.cpp Encryption.cpp Filesystem.cpp
 LIBS = `pkg-config fuse --cflags --libs` -lssl -lcrypto

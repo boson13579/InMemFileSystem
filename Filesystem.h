@@ -22,6 +22,7 @@ public:
     time_t atime;
     time_t mtime;
     time_t ctime;
+    unsigned char *key;
 
     File(const std::string &name, mode_t mode);
 };

@@ -2,7 +2,7 @@
 #include <ctime>
 
 File::File(const std::string &name, mode_t mode)
-    : size(0), name(name), mode(mode) {
+    : size(0), name(name), mode(mode), key(nullptr){
     time(&atime);
     time(&mtime);
     time(&ctime);

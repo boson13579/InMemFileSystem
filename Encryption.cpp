@@ -45,24 +45,22 @@ unsigned char *getkey() {
     string skey;
 
     bool rsize = false, rchar = false;
-    while(!rsize || !rchar) {
+    while (!rsize || !rchar) {
         skey = getpass("Enter key without blank: ");
 
         if (skey.size() != 64) {
             cout << "Key must be 32 bytes long." << endl;
             rsize = false;
-        } else {
+        } else
             rsize = true;
-        }
 
         for (int i = 0; i < 64; i++) {
-            if (!isdigit(skey[i]) && !(skey[i] >= 'a' && skey[i] <= 'f')){
+            if (!isdigit(skey[i]) && !(skey[i] >= 'a' && skey[i] <= 'f')) {
                 cout << "Key must be in hexadecimal format." << endl;
                 rchar = false;
                 break;
-            } else {
+            } else
                 rchar = true;
-            }
         }
     }
 

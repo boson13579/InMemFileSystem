@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <fuse.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 #include "Encryption.h"
 #include "Filesystem.h"
@@ -122,15 +121,15 @@ static int ramfs_open(const char *path, struct fuse_file_info *fi) {
         return -ENOENT;
     }
     File *file = parent->files[file_name];
-    if(file -> size == 0) return 0;
-    if (file -> key != NULL) return -ETXTBSY;
+    if (file->size == 0) return 0;
+    if (file->key != NULL) return -ETXTBSY;
 
     unsigned char *key = getkey();
     unsigned char plain[4096];
     int plansize = decrypt(file->contents[0].data.data(), file->contents[0].data.size(), key, file->contents[0].iv.data(), plain);
-    if(plansize <= 0) return -EACCES;
-     
-    file -> key = key;
+    if (plansize <= 0) return -EACCES;
+
+    file->key = key;
     return 0;
 }
 
@@ -145,14 +144,14 @@ static int ramfs_read(const char *path, char *buf, size_t size, off_t offset, st
     }
 
     File *file = parent->files[file_name];
-    if(!file -> size) return 0;
+    if (!file->size) return 0;
 
     // AES decrypt
-    auto key = file -> key == NULL ? getkey() : file -> key;
+    auto key = file->key == NULL ? getkey() : file->key;
     if (key == NULL) return -EAGAIN;
     unsigned char plain[4096];
     int plansize = decrypt(file->contents[offset].data.data(), file->contents[offset].data.size(), key, file->contents[offset].iv.data(), plain);
-    if(plansize <= 0) return -EACCES;
+    if (plansize <= 0) return -EACCES;
     memcpy(buf, plain, size);
     file->atime = time(nullptr);
     return size;
@@ -173,16 +172,16 @@ static int ramfs_write(const char *path, const char *buf, size_t size, off_t off
     if (offset % 4096 != 0) {
         off_t oldoff = offset / 4096 * 4096;
         int plansize = decrypt(file->contents[oldoff].data.data(), file->contents[oldoff].data.size(), file->key, file->contents[oldoff].iv.data(), predata);
-        if(plansize <= 0) return -EACCES;
+        if (plansize <= 0) return -EACCES;
     }
 
     memcpy(predata + offset % 4096, buf, size);
     unsigned char iv[16];
     RAND_bytes(iv, 16);
-    unsigned char *key = file -> key == NULL ? getkey() : file -> key;
+    unsigned char *key = file->key == NULL ? getkey() : file->key;
     if (key == NULL) return -EAGAIN;
     unsigned char chiper[4096];  // if file larger than 4096, it will be cut and add offset
-    int chiper_size = encrypt(predata, offset%4096+size, key, iv, chiper);
+    int chiper_size = encrypt(predata, offset % 4096 + size, key, iv, chiper);
 
     file->contents[offset / 4096 * 4096].size = offset + size;
     file->contents[offset / 4096 * 4096].iv = std::vector<unsigned char>(iv, iv + 16);
@@ -259,6 +258,7 @@ static int ramfs_release(const char *path, struct fuse_file_info *fi) {
 
     return 0;
 }
+
 static struct fuse_operations ramfs_oper = {
     .getattr = ramfs_getattr,
     .mkdir = ramfs_mkdir,

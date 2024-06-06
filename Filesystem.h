@@ -8,7 +8,6 @@
 struct Content {
     int size; //plantext size
     std::vector<unsigned char> data; // chiper
-    std::vector<unsigned char> iv;
 
     Content() : size(0) {}
 };
@@ -22,6 +21,7 @@ public:
     time_t atime;
     time_t mtime;
     time_t ctime;
+    unsigned char *iv;
     unsigned char *key;
 
     File(const std::string &name, mode_t mode);

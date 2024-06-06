@@ -1,8 +1,11 @@
 #include "Filesystem.h"
+#include <openssl/rand.h>
 #include <ctime>
 
 File::File(const std::string &name, mode_t mode)
-    : size(0), name(name), mode(mode), key(nullptr){
+    : size(0), name(name), mode(mode), key(nullptr) {
+    iv = new unsigned char[16];
+    RAND_bytes(iv, 16);
     time(&atime);
     time(&mtime);
     time(&ctime);

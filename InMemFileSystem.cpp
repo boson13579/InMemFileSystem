@@ -126,7 +126,7 @@ static int ramfs_open(const char *path, struct fuse_file_info *fi) {
 
     unsigned char *key = getkey();
     unsigned char plain[4096];
-    int plansize = decrypt(file->contents[0].data.data(), file->contents[0].data.size(), key, file->contents[0].iv.data(), plain);
+    int plansize = decrypt(file->contents[0].data.data(), file->contents[0].data.size(), key, file->iv, plain);
     if (plansize <= 0) return -EACCES;
 
     file->key = key;
@@ -146,13 +146,15 @@ static int ramfs_read(const char *path, char *buf, size_t size, off_t offset, st
     File *file = parent->files[file_name];
     if (!file->size) return 0;
 
+    size_t block_idx = offset / 4096;
+    size_t block_offset = offset % 4096;
+
     // AES decrypt
-    auto key = file->key == NULL ? getkey() : file->key;
-    if (key == NULL) return -EAGAIN;
+
     unsigned char plain[4096];
-    int plansize = decrypt(file->contents[offset].data.data(), file->contents[offset].data.size(), key, file->contents[offset].iv.data(), plain);
+    int plansize = decrypt(file->contents[block_idx].data.data(), file->contents[block_idx].data.size(), file->key, file->iv, plain);
     if (plansize <= 0) return -EACCES;
-    memcpy(buf, plain, size);
+    memcpy(buf, plain + block_offset , size);
     file->atime = time(nullptr);
     return size;
 }
@@ -168,24 +170,27 @@ static int ramfs_write(const char *path, const char *buf, size_t size, off_t off
     }
     File *file = parent->files[file_name];
 
+    size_t block_idx = offset / 4096;
+    size_t block_offset = offset % 4096;
+
     unsigned char predata[4096];
-    if (offset % 4096 != 0) {
-        off_t oldoff = offset / 4096 * 4096;
-        int plansize = decrypt(file->contents[oldoff].data.data(), file->contents[oldoff].data.size(), file->key, file->contents[oldoff].iv.data(), predata);
+    if (block_offset) {
+        int plansize = decrypt(file->contents[block_idx].data.data(), file->contents[block_idx].data.size(), file->key, file->iv, predata);
         if (plansize <= 0) return -EACCES;
     }
 
-    memcpy(predata + offset % 4096, buf, size);
-    unsigned char iv[16];
-    RAND_bytes(iv, 16);
+    // copy writting data to predata, predata become new block data
+    memcpy(predata + block_offset, buf, size);
+    
+    // since create data will skip open data, we need to check key
     unsigned char *key = file->key == NULL ? getkey() : file->key;
     if (key == NULL) return -EAGAIN;
+    
     unsigned char chiper[4096];  // if file larger than 4096, it will be cut and add offset
-    int chiper_size = encrypt(predata, offset % 4096 + size, key, iv, chiper);
+    int chiper_size = encrypt(predata, block_offset + size, key, file -> iv, chiper);
 
-    file->contents[offset / 4096 * 4096].size = offset + size;
-    file->contents[offset / 4096 * 4096].iv = std::vector<unsigned char>(iv, iv + 16);
-    file->contents[offset / 4096 * 4096].data = std::vector<unsigned char>(chiper, chiper + chiper_size);
+    file->contents[block_idx].size = block_offset + size;
+    file->contents[block_idx].data = std::vector<unsigned char>(chiper, chiper + chiper_size);
 
     file->size = 0;
     for (auto [off, content] : file->contents) {

@@ -6,34 +6,29 @@
 #include <vector>
 
 struct Content {
-    int size; //plantext size
-    std::vector<unsigned char> data; // chiper
+    int size;                         // plantext size
+    std::vector<unsigned char> data;  // chiper
 
     Content() : size(0) {}
 };
 
 class File {
-public:
+   public:
     int size;
     std::string name;
     std::unordered_map<off_t, Content> contents;
     mode_t mode;
-    time_t atime;
-    time_t mtime;
-    time_t ctime;
-    unsigned char *iv;
-    unsigned char *key;
+    time_t atime, mtime, ctime;
+    unsigned char *iv, *key;
 
     File(const std::string &name, mode_t mode);
 };
 
 class Directory {
-public:
+   public:
     std::string name;
     mode_t mode;
-    time_t atime;
-    time_t mtime;
-    time_t ctime;
+    time_t atime, mtime, ctime;
     std::unordered_map<std::string, Directory *> directories;
     std::unordered_map<std::string, File *> files;
 
@@ -42,17 +37,17 @@ public:
 };
 
 class InMemoryFileSystem {
-public:
+   public:
     Directory *root;
 
     InMemoryFileSystem();
     ~InMemoryFileSystem();
 
     std::vector<std::string> splitPath(const std::string &path);
-    Directory* findParentDirectory(const std::string &path);
+    Directory *findParentDirectory(const std::string &path);
 
-private:
-    Directory* findDirectory(const std::string &path);
+   private:
+    Directory *findDirectory(const std::string &path);
 };
 
-#endif // FILESYSTEM_H
+#endif  // FILESYSTEM_H
